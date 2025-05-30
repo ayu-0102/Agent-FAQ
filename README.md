@@ -18,10 +18,11 @@ FAQ Agent is an intelligent Discord bot that answers frequently asked questions 
 
 ## 🛠️ Setup Instructions
 
-### 1. Clone the Repo
+ 1. Clone the Repo
 
 git clone https://github.com/YourUsername/FAQ-Agent.git
 cd FAQ-Agent
+
 2. Install Dependencies
 
 npm install
