@@ -1,0 +1,16 @@
+{
+  "guildId_1": [
+    {
+      "question": "How to contribute?",
+      "answer": "You can contribute by...",
+      "embedding": [0.123, 0.456]
+    }
+  ],
+  "guildId_2": [
+    {
+      "question": "What is AI?",
+      "answer": "Artificial Intelligence is...",
+      "embedding": [0.234, 0.567]
+    }
+  ]
+}
