@@ -1,138 +1,247 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import ApiService from '../services/api';
 
 const Activity = () => {
-  const recentQuestions = [
-    { question: "How do I install the bot?", similarity: 0.92, answered: true, server: "Tech Community", time: "2 min ago" },
-    { question: "What are the requirements?", similarity: 0.87, answered: true, server: "Dev Server", time: "5 min ago" },
-    { question: "How to configure settings?", similarity: 0.45, answered: false, server: "Help Desk", time: "8 min ago" },
-    { question: "Is this bot free?", similarity: 0.91, answered: true, server: "General Chat", time: "12 min ago" },
-    { question: "Can I customize responses?", similarity: 0.38, answered: false, server: "Tech Community", time: "15 min ago" },
-  ];
+  const [unknownQuestions, setUnknownQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [answerModal, setAnswerModal] = useState(null);
+  const [answer, setAnswer] = useState('');
+
+  useEffect(() => {
+    fetchUnknownQuestions();
+  }, []);
+
+  const fetchUnknownQuestions = async () => {
+    try {
+      setLoading(true);
+      const data = await ApiService.getUnknownQuestions();
+      setUnknownQuestions(data);
+    } catch (error) {
+      console.error('Failed to fetch unknown questions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectQuestion = (index) => {
+    setSelectedQuestions(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedQuestions(
+      selectedQuestions.length === unknownQuestions.length 
+        ? [] 
+        : unknownQuestions.map((_, index) => index)
+    );
+  };
+
+  const handleConvertToFaq = async (question, answerText) => {
+    try {
+      await ApiService.convertUnknownQuestion(question._id, answerText);
+      setUnknownQuestions(prev => prev.filter(q => q._id !== question._id));
+      setAnswerModal(null);
+      setAnswer('');
+    } catch (error) {
+      console.error('Failed to convert question:', error);
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId) => {
+    try {
+      await ApiService.deleteUnknownQuestion(questionId);
+      setUnknownQuestions(prev => prev.filter(q => q._id !== questionId));
+    } catch (error) {
+      console.error('Failed to delete question:', error);
+    }
+  };
+
+  const getPriorityColor = (count) => {
+    if (count >= 5) return 'red';
+    if (count >= 3) return 'yellow';
+    return 'green';
+  };
+
+  const getPriorityLabel = (count) => {
+    if (count >= 5) return 'High';
+    if (count >= 3) return 'Medium';
+    return 'Low';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading unknown questions...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">Recent Questions & Semantic Activity</h2>
-        <p className="text-gray-600">Monitor user questions, semantic similarity scores, and bot performance.</p>
-      </div>
-
-      {/* Semantic Threshold Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center space-x-2">
-          <span className="text-blue-600 text-lg">🎯</span>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-8 py-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-blue-800">Semantic Similarity Threshold</h3>
-            <p className="text-sm text-blue-600">Questions with similarity ≥ 0.85 are automatically answered</p>
+            <h1 className="text-2xl font-bold text-gray-900">Unknown Questions</h1>
+            <p className="text-gray-600 mt-1">Review and manage unrecognized questions ({unknownQuestions.length} pending)</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <span className="text-sm text-gray-500">Welcome, John Doe</span>
+            <button className="text-red-600 hover:text-red-700 text-sm font-medium">
+              Logout
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Recent Questions Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-xl font-semibold text-gray-800">Recent User Questions</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Similarity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {recentQuestions.map((item, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 max-w-xs truncate">{item.question}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{item.server}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className={`text-sm font-medium ${
-                        item.similarity >= 0.85 ? 'text-green-600' : 
-                        item.similarity >= 0.5 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {(item.similarity * 100).toFixed(0)}%
+      {/* Content */}
+      <div className="p-8">
+        {/* Bulk Actions */}
+        {unknownQuestions.length > 0 && (
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={selectedQuestions.length === unknownQuestions.length}
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Select All</span>
+              </label>
+              {selectedQuestions.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">{selectedQuestions.length} selected</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Questions List */}
+        <div className="space-y-4">
+          {unknownQuestions.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <div className="text-gray-400 text-6xl mb-4">✅</div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">All caught up!</h3>
+              <p className="text-gray-500">No unknown questions at the moment.</p>
+            </div>
+          ) : (
+            unknownQuestions.map((question, index) => {
+              const priority = getPriorityLabel(question.count);
+              const priorityColor = getPriorityColor(question.count);
+              
+              return (
+                <div key={question._id} className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-start space-x-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedQuestions.includes(index)}
+                      onChange={() => handleSelectQuestion(index)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1"
+                    />
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-3">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          priorityColor === 'red' 
+                            ? 'bg-red-100 text-red-800' 
+                            : priorityColor === 'yellow'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {priority} Priority
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          Asked {question.count} time{question.count !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          Guild: {question.guildId}
+                        </span>
                       </div>
-                      <div className={`ml-2 w-16 bg-gray-200 rounded-full h-2`}>
-                        <div 
-                          className={`h-2 rounded-full ${
-                            item.similarity >= 0.85 ? 'bg-green-500' : 
-                            item.similarity >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${item.similarity * 100}%` }}
-                        ></div>
+                      
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                        "{question.text}"
+                      </h3>
+                      
+                      <div className="flex items-center space-x-3">
+                        <button 
+                          onClick={() => setAnswerModal(question)}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm"
+                        >
+                          Add to FAQs
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteQuestion(question._id)}
+                          className="text-red-600 hover:text-red-700 px-4 py-2 text-sm font-medium"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      item.answered 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {item.answered ? '✅ Answered' : '❌ No Match'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.time}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                <span className="text-green-600 font-semibold">✓</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-500">Successfully Answered</div>
-              <div className="text-2xl font-bold text-gray-900">87%</div>
-            </div>
-          </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                <span className="text-yellow-600 font-semibold">?</span>
+        {/* Answer Modal */}
+        {answerModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Add Answer for Question
+                </h3>
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <p className="font-medium text-gray-700">Question:</p>
+                  <p className="text-gray-600">"{answerModal.text}"</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Asked {answerModal.count} times in Guild: {answerModal.guildId}
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Your Answer:
+                  </label>
+                  <textarea
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows="4"
+                    placeholder="Enter a helpful answer for this question..."
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      setAnswerModal(null);
+                      setAnswer('');
+                    }}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleConvertToFaq(answerModal, answer)}
+                    disabled={!answer.trim()}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    Save as FAQ
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-500">Avg. Similarity Score</div>
-              <div className="text-2xl font-bold text-gray-900">0.73</div>
-            </div>
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                <span className="text-blue-600 font-semibold">#</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-500">Questions Today</div>
-              <div className="text-2xl font-bold text-gray-900">42</div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
