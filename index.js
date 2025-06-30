@@ -2,9 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const { getEmbedding } = require('./backend/embedding');
 const { cosineSimilarity } = require('./backend/similarity');
-const mongoose = require('mongoose');
-const Faq = require('./models/Faq');
-const UnknownQuestion = require('./models/UnknownQuestion');
+const { Faq, UnknownQuestion } = require('./backend/database');
 
 const client = new Client({
   intents: [
@@ -16,12 +14,7 @@ const client = new Client({
   partials: ['CHANNEL'],
 });
 
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log("✅ MongoDB connected"))
-.catch((err) => console.error("❌ MongoDB error", err));
+console.log("✅ SQLite database connected");
 
 // Map to track admins who have pending FAQ reply requests (adminId => { guildId, question })
 const pendingFaqReplies = new Map();
@@ -59,7 +52,7 @@ client.on('messageCreate', async (message) => {
       }
 
       // Save new FAQ entry in DB
-      await Faq.create({
+      Faq.create({
         guildId,
         question,
         answer: message.content.trim(),
@@ -81,10 +74,8 @@ client.on('messageCreate', async (message) => {
   const guildId = message.guild.id;
   const userMsg = message.content.toLowerCase().trim();
 
-;
-
   // Load all FAQs for the guild
-  const faqs = await Faq.find({ guildId });
+  const faqs = Faq.findByGuildId(guildId);
   if (!faqs.length) {
     await message.channel.send("🤔 No FAQs found yet.");
     return;
@@ -116,16 +107,15 @@ client.on('messageCreate', async (message) => {
 
   console.log("🔍 User question:", userMsg);
   console.log("📘 Matched FAQ:", bestMatch?.question);
-  console.log("📊 Similarity score:", bestScore)
-
+  console.log("📊 Similarity score:", bestScore);
 
   // Handle unknown question tracking
-  let unknown = await UnknownQuestion.findOne({ guildId, text: userMsg });
+  let unknown = UnknownQuestion.findOne({ guildId, text: userMsg });
 
   if (unknown) {
     // Increment count since question was asked again
     unknown.count++;
-    await unknown.save();
+    UnknownQuestion.updateById(unknown._id, { count: unknown.count });
 
     // Notify admin only when count reaches 3
     if (unknown.count === 3) {
@@ -145,13 +135,13 @@ client.on('messageCreate', async (message) => {
       }
 
       // Remove this unknown question so admin is not spammed repeatedly
-      await UnknownQuestion.deleteOne({ _id: unknown._id });
+      UnknownQuestion.deleteOne({ _id: unknown._id });
 
       return;
     }
   } else {
     // First time this unknown question was asked, save with count = 1
-    await UnknownQuestion.create({
+    UnknownQuestion.create({
       guildId,
       text: userMsg,
       count: 1,
@@ -162,7 +152,5 @@ client.on('messageCreate', async (message) => {
   // If no match and no admin notification needed yet, send default message
   await message.channel.send("🤔 I'm not sure how to answer that yet.");
 });
-
-
 
 client.login(process.env.DISCORD_TOKEN);

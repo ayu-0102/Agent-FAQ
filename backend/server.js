@@ -1,11 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const Faq = require('../models/Faq');
-const UnknownQuestion = require('../models/UnknownQuestion');
+const { Faq, UnknownQuestion } = require('./database');
 const { getEmbedding } = require('./embedding');
 
 const app = express();
@@ -15,13 +13,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log("✅ MongoDB connected for API server"))
-.catch((err) => console.error("❌ MongoDB error", err));
+console.log("✅ SQLite database connected for API server");
 
 // Routes
 
@@ -29,7 +21,7 @@ mongoose.connect(process.env.MONGO_URI, {
 app.get('/api/faqs/:guildId', async (req, res) => {
   try {
     const { guildId } = req.params;
-    const faqs = await Faq.find({ guildId }).sort({ createdAt: -1 });
+    const faqs = Faq.findByGuildId(guildId);
     res.json(faqs);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -39,7 +31,7 @@ app.get('/api/faqs/:guildId', async (req, res) => {
 // Get all FAQs (for admin dashboard)
 app.get('/api/faqs', async (req, res) => {
   try {
-    const faqs = await Faq.find().sort({ createdAt: -1 });
+    const faqs = Faq.findAll();
     res.json(faqs);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -57,7 +49,7 @@ app.post('/api/faqs', async (req, res) => {
       return res.status(400).json({ error: 'Failed to generate embedding' });
     }
 
-    const faq = new Faq({
+    const faq = Faq.create({
       guildId,
       question,
       answer,
@@ -65,7 +57,6 @@ app.post('/api/faqs', async (req, res) => {
       createdAt: new Date()
     });
 
-    await faq.save();
     res.status(201).json(faq);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -84,11 +75,12 @@ app.put('/api/faqs/:id', async (req, res) => {
       return res.status(400).json({ error: 'Failed to generate embedding' });
     }
 
-    const faq = await Faq.findByIdAndUpdate(
-      id,
-      { question, answer, embedding, updatedAt: new Date() },
-      { new: true }
-    );
+    const faq = Faq.findByIdAndUpdate(id, {
+      question,
+      answer,
+      embedding,
+      updatedAt: new Date()
+    });
 
     if (!faq) {
       return res.status(404).json({ error: 'FAQ not found' });
@@ -104,7 +96,7 @@ app.put('/api/faqs/:id', async (req, res) => {
 app.delete('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const faq = await Faq.findByIdAndDelete(id);
+    const faq = Faq.findByIdAndDelete(id);
     
     if (!faq) {
       return res.status(404).json({ error: 'FAQ not found' });
@@ -119,7 +111,7 @@ app.delete('/api/faqs/:id', async (req, res) => {
 // Get unknown questions
 app.get('/api/unknown-questions', async (req, res) => {
   try {
-    const unknownQuestions = await UnknownQuestion.find().sort({ count: -1, createdAt: -1 });
+    const unknownQuestions = UnknownQuestion.findAll();
     res.json(unknownQuestions);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -132,13 +124,13 @@ app.post('/api/unknown-questions/:id/convert', async (req, res) => {
     const { id } = req.params;
     const { answer } = req.body;
     
-    const unknownQuestion = await UnknownQuestion.findById(id);
+    const unknownQuestion = UnknownQuestion.findById(id);
     if (!unknownQuestion) {
       return res.status(404).json({ error: 'Unknown question not found' });
     }
 
     // Create new FAQ
-    const faq = new Faq({
+    const faq = Faq.create({
       guildId: unknownQuestion.guildId,
       question: unknownQuestion.text,
       answer,
@@ -146,8 +138,7 @@ app.post('/api/unknown-questions/:id/convert', async (req, res) => {
       createdAt: new Date()
     });
 
-    await faq.save();
-    await UnknownQuestion.findByIdAndDelete(id);
+    UnknownQuestion.findByIdAndDelete(id);
 
     res.status(201).json(faq);
   } catch (error) {
@@ -159,7 +150,7 @@ app.post('/api/unknown-questions/:id/convert', async (req, res) => {
 app.delete('/api/unknown-questions/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const unknownQuestion = await UnknownQuestion.findByIdAndDelete(id);
+    const unknownQuestion = UnknownQuestion.findByIdAndDelete(id);
     
     if (!unknownQuestion) {
       return res.status(404).json({ error: 'Unknown question not found' });
@@ -174,16 +165,17 @@ app.delete('/api/unknown-questions/:id', async (req, res) => {
 // Get dashboard stats
 app.get('/api/stats', async (req, res) => {
   try {
-    const totalFaqs = await Faq.countDocuments();
-    const unknownQuestions = await UnknownQuestion.countDocuments();
+    const totalFaqs = Faq.countDocuments();
+    const unknownQuestions = UnknownQuestion.countDocuments();
     
     // Mock data for now - you can implement real analytics later
+    const recentFaqs = Faq.findAll().slice(0, 5);
     const stats = {
       totalFaqs,
       unknownQuestions,
       accuracy: 94.2,
       todaysQuestions: 18,
-      recentQuestions: await Faq.find().sort({ createdAt: -1 }).limit(5)
+      recentQuestions: recentFaqs
     };
 
     res.json(stats);
